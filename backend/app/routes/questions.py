@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import Body
 from groq import Groq
 import os
 from dotenv import load_dotenv
@@ -566,3 +567,56 @@ def generate_questions(field: str, difficulty: str, category: str = "behavioral"
                 "category": category, "questions": questions}
     except Exception as e:
         return {"error": str(e), "questions": []}
+    
+
+@router.post("/tips/generate")
+def generate_tips(summary: dict = Body(...)):
+    prompt = f"""You are an expert interview coach. Analyze this candidate's interview performance data and give personalized improvement tips.
+
+Performance Summary:
+- Total attempts: {summary.get('total_attempts')}
+- Average score: {summary.get('avg_score')}/100
+- Average structure score: {summary.get('avg_structure')}/100
+- Average content score: {summary.get('avg_content')}/100
+- Average confidence score: {summary.get('avg_confidence')}/100
+- Average clarity score: {summary.get('avg_clarity')}/100
+- Average filler words per answer: {summary.get('avg_fillers')}
+- Recent scores: {summary.get('recent_scores')}
+- Question types practiced: {summary.get('question_types')}
+- Most common errors: {summary.get('common_feedback')}
+
+Return ONLY a JSON object in this exact format:
+{{
+  "overall_assessment": "2-3 sentence honest assessment of their current level and biggest opportunity",
+  "weak_areas": [
+    {{"area": "area name", "explanation": "specific explanation of the problem"}}
+  ],
+  "action_tips": [
+    "specific actionable tip 1",
+    "specific actionable tip 2",
+    "specific actionable tip 3",
+    "specific actionable tip 4",
+    "specific actionable tip 5"
+  ],
+  "strengths": [
+    "strength 1",
+    "strength 2"
+  ],
+  "practice_recommendation": "specific recommendation on what to practice next based on their weak areas"
+}}
+
+Be honest, specific, and actionable. Reference their actual scores."""
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=1000,
+        )
+        content = response.choices[0].message.content.strip()
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        return json.loads(content[start:end])
+    except Exception as e:
+        return {"error": str(e)}

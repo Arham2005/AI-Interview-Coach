@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ScoreCard from '../components/ScoreCard';
 import FeedbackCard from '../components/FeedbackCard';
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const FIELDS = [
   "Artificial Intelligence", "Software Engineering", "Data Science",
@@ -14,26 +16,26 @@ const orangeDark = '#ea580c';
 const card = '#111111';
 const cardBorder = '#222222';
 
-export default function Home() {
-  const [question, setQuestion]           = useState('');
-  const [answer, setAnswer]               = useState('');
-  const [result, setResult]               = useState(null);
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState('');
-  const [category, setCategory]           = useState('behavioral');
-  const [field, setField]                 = useState('Artificial Intelligence');
-  const [customField, setCustomField]     = useState('');
-  const [difficulty, setDifficulty]       = useState('easy');
-  const [questions, setQuestions]         = useState([]);
-  const [loadingQ, setLoadingQ]           = useState(false);
+export default function Home({ user }) {
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [category, setCategory] = useState('behavioral');
+  const [field, setField] = useState('Artificial Intelligence');
+  const [customField, setCustomField] = useState('');
+  const [difficulty, setDifficulty] = useState('easy');
+  const [questions, setQuestions] = useState([]);
+  const [loadingQ, setLoadingQ] = useState(false);
   const [isAiGenerated, setIsAiGenerated] = useState(false);
-  const [mode, setMode]                   = useState('text');
-  const [recording, setRecording]         = useState(false);
+  const [mode, setMode] = useState('text');
+  const [recording, setRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioBlob, setAudioBlob]         = useState(null);
-  const [audioURL, setAudioURL]           = useState('');
-  const [transcript, setTranscript]       = useState('');
-  const [speaking, setSpeaking]           = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioURL, setAudioURL] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [speaking, setSpeaking] = useState(false);
 
   const isCustom = !FIELDS.includes(field);
 
@@ -65,10 +67,13 @@ export default function Home() {
       const fd = new FormData();
       fd.append('question', question);
       fd.append('answer', answer);
-      fd.append('use_groq', isAiGenerated ? 'true' : 'false');
+      // fd.append('use_groq', (isAiGenerated || category === 'technical') ? 'true' : 'false');
+      fd.append('use_groq', 'true');
       const res = await fetch('http://127.0.0.1:8000/api/analyze/text', { method: 'POST', body: fd });
       if (!res.ok) throw new Error('Server error.');
-      setResult(await res.json());
+      const data = await res.json();
+      setResult(data);
+      saveToHistory(data, question);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -120,6 +125,27 @@ export default function Home() {
     }
   };
 
+  const saveToHistory = async (data, q) => {
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'history'), {
+        question: q,
+        question_type: data.question_type,
+        final_score: data.final_score,
+        breakdown: data.breakdown,
+        feedback: data.feedback,
+        word_count: data.word_count,
+        filler_count: data.filler_count,
+        confidence_level: data.confidence_level,
+        field: field,
+        category: category,
+        difficulty: difficulty,
+        date: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error('Failed to save to history:', err);
+    }
+  };
+
   const handleAudioAnalyze = async () => {
     if (!question.trim()) {
       setError('Please select a question first.');
@@ -134,7 +160,8 @@ export default function Home() {
       const fd = new FormData();
       fd.append('question', question);
       fd.append('audio', audioBlob, 'answer.webm');
-      fd.append('use_groq', isAiGenerated ? 'true' : 'false');
+      // fd.append('use_groq', (isAiGenerated || category === 'technical') ? 'true' : 'false');
+      fd.append('use_groq', 'true');
       const res = await fetch('http://127.0.0.1:8000/api/analyze/audio', {
         method: 'POST', body: fd,
       });
@@ -142,6 +169,7 @@ export default function Home() {
       const data = await res.json();
       if (data.transcript) setTranscript(data.transcript);
       setResult(data);
+      saveToHistory(data, question);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -158,7 +186,7 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Header
       <div style={{
         background: 'rgba(0,0,0,0.85)',
         backdropFilter: 'blur(12px)',
@@ -189,7 +217,7 @@ export default function Home() {
         }}>
           ● API Connected
         </div>
-      </div>
+      </div> */}
 
       <div style={{ maxWidth: '860px', margin: '0 auto', padding: '40px 20px' }}>
 
@@ -275,10 +303,10 @@ export default function Home() {
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               {[
-                { d: 'easy',     color: '#16a34a' },
-                { d: 'medium',   color: '#d97706' },
-                { d: 'hard',     color: '#dc2626' },
-                { d: 'advanced', color: orange    },
+                { d: 'easy', color: '#16a34a' },
+                { d: 'medium', color: '#d97706' },
+                { d: 'hard', color: '#dc2626' },
+                { d: 'advanced', color: orange },
               ].map(({ d, color }) => (
                 <button key={d} onClick={() => setDifficulty(d)} style={{
                   flex: 1, padding: '10px 4px', borderRadius: '8px', fontSize: '12px',
@@ -327,7 +355,7 @@ export default function Home() {
                   boxShadow: question === q ? `0 0 16px rgba(249,115,22,0.2)` : 'none',
                   transition: 'all 0.2s',
                 }}>
-                  <span style={{ color: '#333', marginRight: '10px', fontSize: '12px' }}>Q{i+1}</span>
+                  <span style={{ color: '#333', marginRight: '10px', fontSize: '12px' }}>Q{i + 1}</span>
                   {q}
                 </div>
               ))}
