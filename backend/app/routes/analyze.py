@@ -12,6 +12,7 @@ from app.services.nlp_analyzer import analyze_text
 from app.services.confidence import analyze_confidence
 from app.services.scorer import compute_score
 from app.services.transcriber import transcribe_audio, transcribe_from_text
+from app.services.video_analyzer import analyze_video
 
 router = APIRouter()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -230,6 +231,67 @@ async def analyze_audio_answer(
             "filler_count":       nlp_result["filler_count"],
             "confidence_level":   confidence_data["confidence_level"],
             "structure_detected": nlp_result["structure"],
+        }
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
+            
+@router.post("/analyze/video")
+async def analyze_video_answer(
+    question: str = Form(...),
+    video: UploadFile = File(...),
+    use_groq: str = Form("false")
+):
+    temp_path = f"temp_{video.filename}"
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(video.file, buffer)
+
+    try:
+        # Extract audio and transcribe
+        text = transcribe_audio(temp_path)
+
+        # Analyze body language from video
+        body_language = analyze_video(temp_path)
+
+        # Analyze answer text
+        nlp_result = analyze_text(text, question)
+        confidence_data = analyze_confidence(text)
+        scores = compute_score(
+            nlp_result["question_type"],
+            nlp_result["structure"],
+            nlp_result["clarity"],
+            nlp_result["filler_count"]
+        )
+        feedback = generate_feedback(
+            nlp_result["question_type"],
+            nlp_result["structure"],
+            nlp_result["clarity"],
+            confidence_data,
+            scores
+        )
+
+        # Combined final score (70% answer + 30% body language)
+        combined_score = round(
+            scores["final_score"] * 0.70 +
+            body_language["body_language_score"] * 0.30
+        )
+
+        return {
+            "transcript":           text,
+            "question_type":        nlp_result["question_type"],
+            "final_score":          combined_score,
+            "answer_score":         scores["final_score"],
+            "body_language_score":  body_language["body_language_score"],
+            "breakdown":            scores["breakdown"],
+            "body_language_breakdown": body_language["breakdown"],
+            "body_language_stats":  body_language["stats"],
+            "feedback":             feedback,
+            "body_language_feedback": body_language["feedback"],
+            "word_count":           nlp_result["clarity"]["word_count"],
+            "filler_count":         nlp_result["filler_count"],
+            "confidence_level":     confidence_data["confidence_level"],
+            "structure_detected":   nlp_result["structure"],
         }
     finally:
         if os.path.exists(temp_path):
