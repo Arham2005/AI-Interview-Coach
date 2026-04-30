@@ -3,6 +3,8 @@ import ScoreCard from '../components/ScoreCard';
 import FeedbackCard from '../components/FeedbackCard';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import VideoRecorder from '../components/VideoRecorder';
+import BodyLanguageCard from '../components/BodyLanguageCard';
 
 const FIELDS = [
   "Artificial Intelligence", "Software Engineering", "Data Science",
@@ -383,7 +385,7 @@ export default function Home({ user }) {
           background: '#111', border: '1px solid #222',
           borderRadius: '12px', padding: '4px',
         }}>
-          {['text', 'audio'].map(m => (
+          {['text', 'audio', 'video'].map(m => (
             <button key={m} onClick={() => {
               setMode(m); setResult(null); setError('');
               window.speechSynthesis.cancel(); setSpeaking(false);
@@ -396,7 +398,7 @@ export default function Home({ user }) {
               boxShadow: mode === m ? `0 0 14px rgba(249,115,22,0.4)` : 'none',
               transition: 'all 0.2s',
             }}>
-              {m === 'text' ? '📝 Text Mode' : '🎤 Audio Mode'}
+              {m === 'text' ? '📝 Text Mode' : m === 'audio' ? '🎤 Audio Mode' : '🎥 Video Mode'}
             </button>
           ))}
         </div>
@@ -568,10 +570,32 @@ export default function Home({ user }) {
           </div>
         )}
 
+        {/* VIDEO MODE */}
+        {mode === 'video' && (
+          <div>
+            <VideoRecorder
+              question={question}
+              isAiGenerated={isAiGenerated}
+              onResult={(data) => {
+                setResult(data);
+                saveToHistory(data, question);
+              }}
+            />
+          </div>
+        )}
+
         {/* Results */}
         {result && (
           <div>
             <ScoreCard score={result.final_score} breakdown={result.breakdown} />
+            {result.body_language_score !== undefined && (
+              <BodyLanguageCard
+                bodyLanguageScore={result.body_language_score}
+                breakdown={result.body_language_breakdown}
+                stats={result.body_language_stats}
+                feedback={result.body_language_feedback}
+              />
+            )}
             <FeedbackCard
               feedback={result.feedback}
               structureDetected={result.structure_detected}
