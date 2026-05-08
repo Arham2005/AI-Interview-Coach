@@ -4,20 +4,20 @@ const orange = '#f97316';
 const orangeDark = '#ea580c';
 
 export default function VideoRecorder({ question, isAiGenerated, onResult }) {
-  const [phase, setPhase]           = useState('ready');
-  const [countdown, setCountdown]   = useState(5);
-  const [recording, setRecording]   = useState(false);
-  const [videoURL, setVideoURL]     = useState('');
-  const [videoBlob, setVideoBlob]   = useState(null);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
-  const [speaking, setSpeaking]     = useState(false);
-  const [timeLeft, setTimeLeft]     = useState(120);
+  const [phase, setPhase] = useState('ready');
+  const [countdown, setCountdown] = useState(5);
+  const [recording, setRecording] = useState(false);
+  const [videoURL, setVideoURL] = useState('');
+  const [videoBlob, setVideoBlob] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [speaking, setSpeaking] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(120);
 
-  const videoRef    = useRef(null);
+  const videoRef = useRef(null);
   const mediaRecRef = useRef(null);
-  const streamRef   = useRef(null);
-  const timerRef    = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -26,6 +26,14 @@ export default function VideoRecorder({ question, isAiGenerated, onResult }) {
       window.speechSynthesis.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if ((phase === 'preview' || phase === 'recording') && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.muted = true;
+      videoRef.current.play().catch(() => { });
+    }
+  }, [phase]);
 
   const stopStream = () => {
     if (streamRef.current) {
@@ -39,7 +47,7 @@ export default function VideoRecorder({ question, isAiGenerated, onResult }) {
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 0.9;
     utter.onstart = () => setSpeaking(true);
-    utter.onend   = () => { setSpeaking(false); startCountdown(); };
+    utter.onend = () => { setSpeaking(false); startCountdown(); };
     window.speechSynthesis.speak(utter);
   };
 
@@ -50,11 +58,14 @@ export default function VideoRecorder({ question, isAiGenerated, onResult }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-      }
       setPhase('preview');
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.muted = true;
+          videoRef.current.play();
+        }
+      }, 100);
       if (question) speakQuestion(question);
       else startCountdown();
     } catch (err) {
@@ -157,7 +168,7 @@ export default function VideoRecorder({ question, isAiGenerated, onResult }) {
     border: 'none', cursor: 'pointer', transition: 'all 0.2s',
   };
 
-  const formatTime = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   return (
     <div style={{
@@ -187,6 +198,7 @@ export default function VideoRecorder({ question, isAiGenerated, onResult }) {
             width: '100%', borderRadius: '12px',
             border: `2px solid ${phase === 'recording' ? '#ef4444' : '#333'}`,
             background: '#000',
+            transform: 'scaleX(-1)',
           }} />
           {phase === 'recording' && (
             <div style={{

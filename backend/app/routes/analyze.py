@@ -153,10 +153,50 @@ async def analyze_text_answer(
             result = analyze_with_groq(question, text)
             return result
         except Exception as e:
-            print(f"Groq analysis failed: {e}, falling back to keyword analysis")
+            print(f"Groq analysis failed: {e}, falling back...")
 
-    # Keyword-based analysis
-    nlp_result = analyze_text(text, question)
+    # Try own model first
+    try:
+        from app.model.predictor import predict_score, is_model_available
+        if is_model_available():
+            model_result    = predict_score(question, text)
+            nlp_result      = analyze_text(text, question)
+            confidence_data = analyze_confidence(text)
+            feedback = generate_feedback(
+                nlp_result["question_type"],
+                nlp_result["structure"],
+                nlp_result["clarity"],
+                confidence_data,
+                {"breakdown": {
+                    "structure":  model_result["score"],
+                    "content":    model_result["score"],
+                    "confidence": 100 if confidence_data["confidence_level"] == "High" else 70,
+                    "clarity":    70  if nlp_result["clarity"]["too_short"] else 100,
+                }}
+            )
+            return {
+                "question_type":      nlp_result["question_type"],
+                "final_score":        model_result["score"],
+                "breakdown": {
+                    "structure":  model_result["score"],
+                    "content":    model_result["score"],
+                    "confidence": 100 if confidence_data["confidence_level"] == "High" else 70,
+                    "clarity":    70  if nlp_result["clarity"]["too_short"] else 100,
+                },
+                "feedback":           feedback,
+                "word_count":         nlp_result["clarity"]["word_count"],
+                "filler_count":       nlp_result["filler_count"],
+                "confidence_level":   confidence_data["confidence_level"],
+                "structure_detected": nlp_result["structure"],
+                "model":              "custom",
+                "label":              model_result["label"],
+                "model_confidence":   model_result["confidence"],
+            }
+    except Exception as e:
+        print(f"Own model failed: {e}, falling back to keywords...")
+
+    # Keyword fallback
+    nlp_result      = analyze_text(text, question)
     confidence_data = analyze_confidence(text)
     scores = compute_score(
         nlp_result["question_type"],
@@ -171,7 +211,6 @@ async def analyze_text_answer(
         confidence_data,
         scores
     )
-
     return {
         "question_type":      nlp_result["question_type"],
         "final_score":        scores["final_score"],
@@ -181,8 +220,8 @@ async def analyze_text_answer(
         "filler_count":       nlp_result["filler_count"],
         "confidence_level":   confidence_data["confidence_level"],
         "structure_detected": nlp_result["structure"],
+        "model":              "keywords",
     }
-
 
 @router.post("/analyze/audio")
 async def analyze_audio_answer(

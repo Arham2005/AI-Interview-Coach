@@ -93,10 +93,34 @@ def analyze_video(video_path: str) -> dict:
             landmarks = face_result.face_landmarks[0]
 
             # Eye contact — check if nose tip is centered
-            nose = landmarks[1]
-            if abs(nose.x - 0.5) < 0.15:
-                eye_contact_frames += 1
-
+            # Eye contact — use iris landmarks for accurate gaze detection
+            try:
+                left_iris  = landmarks[473]
+                right_iris = landmarks[468]
+                left_inner  = landmarks[133]
+                left_outer  = landmarks[33]
+                right_inner = landmarks[362]
+                right_outer = landmarks[263]
+            
+                left_eye_width  = abs(left_outer.x  - left_inner.x)
+                right_eye_width = abs(right_outer.x - right_inner.x)
+            
+                if left_eye_width > 0.001 and right_eye_width > 0.001:
+                    left_ratio  = (left_iris.x  - left_inner.x)  / left_eye_width
+                    right_ratio = (right_iris.x - right_inner.x) / right_eye_width
+            
+                    left_centered  = 0.25 < left_ratio  < 0.75
+                    right_centered = 0.25 < right_ratio < 0.75
+            
+                    if left_centered and right_centered:
+                        eye_contact_frames += 1
+            except:
+                # Fallback to nose position
+                nose = landmarks[1]
+                if abs(nose.x - 0.5) < 0.15:
+                    eye_contact_frames += 1
+            
+            
             # Nod detection
             if nose_y_prev is not None:
                 dy = nose.y - nose_y_prev

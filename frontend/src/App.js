@@ -6,6 +6,7 @@ import History from './pages/History';
 import Login from './pages/Login';
 import './index.css';
 import Tips from './pages/Tips';
+import MockInterview from './pages/MockInterview';
 
 const orange = '#f97316';
 
@@ -42,7 +43,7 @@ function ParticleCanvas() {
           ctx.fill();
         }
         p.x += p.dx; p.y += p.dy;
-        if (p.x < 0 || p.x > canvas.width)  p.dx *= -1;
+        if (p.x < 0 || p.x > canvas.width) p.dx *= -1;
         if (p.y < 0 || p.y > canvas.height) p.dy *= -1;
       });
       animId = requestAnimationFrame(draw);
@@ -68,9 +69,10 @@ function ParticleCanvas() {
 }
 
 function App() {
-  const [user, setUser]   = useState(null);
-  const [page, setPage]   = useState('home');
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('home');
   const [authLoading, setAuthLoading] = useState(true);
+  const [sessionData, setSessionData] = useState(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -129,9 +131,10 @@ function App() {
 
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {[
-                  { id: 'home',    label: '🎯 Practice' },
-                  { id: 'history', label: '📊 History'  },
-                  { id: 'tips',    label: '💡 Tips'     },
+                  { id: 'home', label: '🎯 Practice' },
+                  { id: 'mock',    label: '🎙️ Mock Interview' },
+                  { id: 'history', label: '📊 History' },
+                  { id: 'tips', label: '💡 Tips' },
                 ].map(({ id, label }) => (
                   <button key={id} onClick={() => setPage(id)} style={{
                     padding: '8px 18px', borderRadius: '8px',
@@ -174,9 +177,10 @@ function App() {
 
             {/* Page Content */}
             <div style={{ paddingTop: '70px' }}>
-              {page === 'home'    && <Home user={user} />}
+              {page === 'home' && <Home user={user} />}
               {page === 'history' && <History user={user} />}
-              {page === 'tips'    && <Tips user={user} />}
+              {page === 'tips' && <Tips user={user} />}
+              {page === 'mock'    && <MockInterview user={user} />}
             </div>
           </>
         )}
