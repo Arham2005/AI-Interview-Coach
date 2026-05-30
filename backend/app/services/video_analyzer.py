@@ -62,10 +62,13 @@ def analyze_video(video_path: str) -> dict:
 
     # Face landmarker
     face_options = vision.FaceLandmarkerOptions(
-        base_options=python.BaseOptions(model_asset_path=MODEL_PATH),
-        output_face_blendshapes=True,
-        output_facial_transformation_matrixes=True,
-        num_faces=1,
+    base_options=python.BaseOptions(model_asset_path=MODEL_PATH),
+    output_face_blendshapes=True,
+    output_facial_transformation_matrixes=True,
+    num_faces=1,
+    min_face_detection_confidence=0.5,
+    min_face_presence_confidence=0.5,
+    min_tracking_confidence=0.5,
     )
     face_detector = vision.FaceLandmarker.create_from_options(face_options)
 

@@ -91,7 +91,7 @@ function ScoreTrendChart({ scores }) {
 
   const areaD = `M ${pts[0].x} ${chartH} ` +
     pts.map(p => `L ${p.x} ${p.y}`).join(' ') +
-    ` L ${pts[pts.length-1].x} ${chartH} Z`;
+    ` L ${pts[pts.length - 1].x} ${chartH} Z`;
 
   const getColor = (s) => s >= 80 ? '#22c55e' : s >= 60 ? orange : '#ef4444';
 
@@ -123,8 +123,8 @@ function ScoreTrendChart({ scores }) {
 }
 
 export default function History({ user }) {
-  const [history, setHistory]   = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => { fetchHistory(); }, []); // eslint-disable-line
@@ -174,22 +174,27 @@ export default function History({ user }) {
   );
 
   // Analytics
-  const scores        = [...history].reverse().map(h => h.final_score);
-  const avgScore      = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-  const avgStructure  = Math.round(history.reduce((s, h) => s + (h.breakdown?.structure || 0), 0) / history.length);
-  const avgContent    = Math.round(history.reduce((s, h) => s + (h.breakdown?.content || 0), 0) / history.length);
+  const scores = [...history].reverse().map(h => h.final_score);
+  const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const avgStructure = Math.round(history.reduce((s, h) => s + (h.breakdown?.structure || 0), 0) / history.length);
+  const avgContent = Math.round(history.reduce((s, h) => s + (h.breakdown?.content || 0), 0) / history.length);
   const avgConfidence = Math.round(history.reduce((s, h) => s + (h.breakdown?.confidence || 0), 0) / history.length);
-  const avgClarity    = Math.round(history.reduce((s, h) => s + (h.breakdown?.clarity || 0), 0) / history.length);
+  const avgClarity = Math.round(history.reduce((s, h) => s + (h.breakdown?.clarity || 0), 0) / history.length);
 
   // Streak
+  // let streak = 0;
+  // for (let i = 0; i < scores.length - 1; i++) {
+  //   if (scores[i] > scores[i + 1]) streak++;
+  //   else break;
+  // }
   let streak = 0;
-  for (let i = 0; i < scores.length - 1; i++) {
-    if (scores[i] > scores[i + 1]) streak++;
+  for (let i = scores.length - 1; i > 0; i--) {
+    if (scores[i] > scores[i - 1]) streak++;
     else break;
   }
 
   // Best and worst
-  const bestScore  = Math.max(...scores);
+  const bestScore = Math.max(...scores);
   const worstScore = Math.min(...scores);
 
   // Most common mistakes
@@ -275,10 +280,10 @@ export default function History({ user }) {
               gap: '12px', marginBottom: '20px',
             }}>
               {[
-                { label: 'Avg Score',   value: avgScore,   icon: '🎯' },
-                { label: 'Best Score',  value: bestScore,  icon: '🏆' },
+                { label: 'Avg Score', value: avgScore, icon: '🎯' },
+                { label: 'Best Score', value: bestScore, icon: '🏆' },
                 { label: 'Worst Score', value: worstScore, icon: '📉' },
-                { label: 'Imp. Streak', value: streak,     icon: '🔥' },
+                { label: 'Imp. Streak', value: streak, icon: '🔥' },
               ].map(stat => (
                 <div key={stat.label} style={{
                   background: card, border: `1px solid ${cardBorder}`,
@@ -434,7 +439,7 @@ export default function History({ user }) {
 
                 {item.feedback?.slice(0, 2).map((f, fi) => {
                   const colors = { error: '#ef4444', warning: orange, success: '#22c55e' };
-                  const icons  = { error: '✗', warning: '⚠', success: '✓' };
+                  const icons = { error: '✗', warning: '⚠', success: '✓' };
                   return (
                     <div key={fi} style={{ color: colors[f.type] || orange, fontSize: '13px', marginBottom: '4px' }}>
                       {icons[f.type]} {f.message}

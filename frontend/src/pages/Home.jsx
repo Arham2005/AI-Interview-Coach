@@ -1053,15 +1053,30 @@ export default function Home({ user }) {
               />
               {/* Quick tips */}
               <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-                {['Start with Situation', 'Describe your Task', 'Explain your Action', 'Share the Result'].map((tip, i) => (
-                  <span key={i} style={{
-                    background: '#1a1a1a', border: '1px solid #222',
-                    borderRadius: '6px', padding: '3px 10px',
-                    color: '#444', fontSize: '11px',
-                  }}>
-                    {['S', 'T', 'A', 'R'][i]} · {tip}
-                  </span>
-                ))}
+                {question && (() => {
+                  const q = question.toLowerCase();
+                  const isIntro = q.includes('yourself');
+                  const isTechnical = q.includes('explain') || q.includes('what is') || q.includes('difference');
+                  const isStrength = q.includes('strength') || q.includes('weakness');
+
+                  const tips = isIntro
+                    ? ['Who you are', 'Your skills', 'Your goals']
+                    : isTechnical
+                      ? ['Define the concept', 'Explain how it works', 'Give an example']
+                      : isStrength
+                        ? ['State your trait', 'Give an example', 'Mention weakness']
+                        : ['Situation', 'Task', 'Action', 'Result'];
+
+                  return tips.map((tip, i) => (
+                    <span key={i} style={{
+                      background: '#1a1a1a', border: '1px solid #222',
+                      borderRadius: '6px', padding: '3px 10px',
+                      color: '#444', fontSize: '11px',
+                    }}>
+                      {tip}
+                    </span>
+                  ));
+                })()}
               </div>
             </div>
 

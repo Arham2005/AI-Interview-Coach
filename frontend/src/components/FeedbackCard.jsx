@@ -187,22 +187,22 @@ import React from 'react';
 const orange = '#f97316';
 
 const structureLabels = {
-  star:      { situation: 'Situation', task: 'Task', action: 'Action', result: 'Result' },
-  intro:     { background: 'Background', skills: 'Skills', goals: 'Goals' },
-  strength:  { trait: 'Trait', example: 'Example', weakness: 'Weakness' },
+  star: { situation: 'Situation', task: 'Task', action: 'Action', result: 'Result' },
+  intro: { background: 'Background', skills: 'Skills', goals: 'Goals' },
+  strength: { trait: 'Trait', example: 'Example', weakness: 'Weakness' },
   technical: { definition: 'Definition', explanation: 'Explanation', example: 'Example' },
 };
 
 const questionTypeLabels = {
-  star:      'STAR Method Breakdown',
-  intro:     'Intro Structure Breakdown',
-  strength:  'Strength/Weakness Breakdown',
+  star: 'STAR Method Breakdown',
+  intro: 'Intro Structure Breakdown',
+  strength: 'Strength/Weakness Breakdown',
   technical: 'Technical Answer Breakdown',
 };
 
 const FeedbackCard = ({ feedback, structureDetected, questionType, confidenceLevel, wordCount, fillerCount }) => {
   const typeStyles = {
-    error:   { background: '#1a0505', border: '1px solid #ef4444', icon: '✗', color: '#ef4444' },
+    error: { background: '#1a0505', border: '1px solid #ef4444', icon: '✗', color: '#ef4444' },
     warning: { background: '#1a0f00', border: `1px solid ${orange}`, icon: '⚠', color: orange },
     success: { background: '#051a0a', border: '1px solid #22c55e', icon: '✓', color: '#22c55e' },
   };
@@ -232,7 +232,10 @@ const FeedbackCard = ({ feedback, structureDetected, questionType, confidenceLev
           fontSize: '12px',
           textTransform: 'capitalize',
         }}>
-          {questionType} question
+          {questionType === 'star' ? 'Behavioral' :
+            questionType === 'intro' ? 'Introduction' :
+              questionType === 'strength' ? 'Strength/Weakness' :
+                questionType === 'technical' ? 'Technical' : questionType} question
         </span>
       </div>
 
@@ -304,9 +307,9 @@ const FeedbackCard = ({ feedback, structureDetected, questionType, confidenceLev
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
         {[
-          { label: 'Word Count',   value: wordCount },
+          { label: 'Word Count', value: wordCount },
           { label: 'Filler Words', value: fillerCount },
-          { label: 'Confidence',   value: confidenceLevel },
+          { label: 'Confidence', value: confidenceLevel },
         ].map(stat => (
           <div key={stat.label} style={{
             background: '#0a0a0a',

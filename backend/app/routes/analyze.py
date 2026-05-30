@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form
-from typing import Optional
 import shutil
 import os
 from groq import Groq
@@ -18,49 +17,31 @@ router = APIRouter()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
-# ─── GROQ ANALYSIS ────────────────────────────────────────────────────────────
 def analyze_with_groq(question, answer):
     prompt = f"""You are an expert interview coach. Analyze this interview answer.
 
 Question: {question}
 Answer: {answer}
 
-Evaluate the answer and return ONLY a JSON object in this exact format, nothing else:
+Return ONLY a JSON object in this exact format:
 {{
   "question_type": "star|intro|strength|technical",
-  "structure_detected": {{
-    "key1": true/false,
-    "key2": true/false
-  }},
+  "structure_detected": {{"key1": true, "key2": false}},
   "final_score": <0-100>,
-  "breakdown": {{
-    "structure": <0-100>,
-    "content": <0-100>,
-    "confidence": <0-100>,
-    "clarity": <0-100>
-  }},
-  "feedback": [
-    {{"type": "error|warning|success", "message": "specific actionable feedback"}}
-  ],
+  "breakdown": {{"structure": <0-100>, "content": <0-100>, "confidence": <0-100>, "clarity": <0-100>}},
+  "feedback": [{{"type": "error|warning|success", "message": "specific feedback"}}],
   "word_count": <number>,
   "filler_count": <number>,
   "confidence_level": "High|Medium|Low"
 }}
 
-Rules for question_type:
-- "intro" for tell me about yourself
-- "star" for behavioral/situational questions
-- "strength" for strength/weakness questions  
-- "technical" for technical concept questions
+Rules:
+- intro: tell me about yourself
+- star: behavioral/situational
+- strength: strength/weakness
+- technical: explain/define/what is
 
-Rules for structure_detected keys:
-- intro: background, skills, goals
-- star: situation, task, action, result
-- strength: trait, example, weakness
-- technical: definition, explanation, example
-
-Be specific and harsh in feedback. Give real actionable advice.
-Score honestly — a weak answer should get 30-50, average 50-70, good 70-85, excellent 85-100."""
+Score honestly: weak=30-50, average=50-70, good=70-85, excellent=85-100"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -68,15 +49,10 @@ Score honestly — a weak answer should get 30-50, average 50-70, good 70-85, ex
         temperature=0.3,
         max_tokens=1000,
     )
-
     content = response.choices[0].message.content.strip()
-    start = content.find("{")
-    end = content.rfind("}") + 1
-    json_str = content[start:end]
-    return json.loads(json_str)
+    return json.loads(content[content.find("{"):content.rfind("}")+1])
 
 
-# ─── KEYWORD ANALYSIS (improved) ──────────────────────────────────────────────
 def generate_feedback(question_type, structure, clarity, confidence_data, scores):
     feedback = []
 
@@ -125,10 +101,10 @@ def generate_feedback(question_type, structure, clarity, confidence_data, scores
     if confidence_data["filler_count"] > 10:
         feedback.append({"type": "error", "message": f"Too many filler words ({confidence_data['filler_count']} detected)."})
     elif confidence_data["filler_count"] > 5:
-        feedback.append({"type": "warning", "message": f"{confidence_data['filler_count']} filler words detected. Reduce 'basically', 'you know' etc."})
+        feedback.append({"type": "warning", "message": f"{confidence_data['filler_count']} filler words detected."})
 
     if clarity["too_short"]:
-        feedback.append({"type": "warning", "message": f"Answer is too short ({clarity['word_count']} words). Aim for at least 50 words."})
+        feedback.append({"type": "warning", "message": f"Answer is too short ({clarity['word_count']} words). Aim for at least 40 words."})
     if clarity["too_long"]:
         feedback.append({"type": "warning", "message": f"Answer is too long ({clarity['word_count']} words). Aim for under 300 words."})
     if clarity["avg_sentence_length"] > 30:
@@ -139,7 +115,42 @@ def generate_feedback(question_type, structure, clarity, confidence_data, scores
     return feedback
 
 
-# ─── ENDPOINTS ────────────────────────────────────────────────────────────────
+def build_breakdown(model_score, confidence_data, nlp_result):
+    """Fix #13 — different scores per dimension instead of all identical"""
+    filler = confidence_data["filler_count"]
+    conf_level = confidence_data["confidence_level"]
+    too_short = nlp_result["clarity"]["too_short"]
+    too_long = nlp_result["clarity"]["too_long"]
+    long_sentences = nlp_result["clarity"]["avg_sentence_length"] > 30
+
+    structure_score = min(100, round(model_score * 1.05))
+    content_score   = model_score
+    confidence_score = 100 if conf_level == "High" else 70 if conf_level == "Medium" else 40
+    if filler > 10: confidence_score = min(confidence_score, 30)
+    elif filler > 5: confidence_score = min(confidence_score, 55)
+    elif filler > 2: confidence_score = min(confidence_score, 75)
+
+    clarity_score = 100
+    if too_short:       clarity_score -= 30
+    if too_long:        clarity_score -= 15
+    if long_sentences:  clarity_score -= 10
+    clarity_score = max(clarity_score, 0)
+
+    final = round(
+        structure_score  * 0.30 +
+        content_score    * 0.30 +
+        confidence_score * 0.20 +
+        clarity_score    * 0.20
+    )
+
+    return final, {
+        "structure":  structure_score,
+        "content":    content_score,
+        "confidence": confidence_score,
+        "clarity":    clarity_score,
+    }
+
+
 @router.post("/analyze/text")
 async def analyze_text_answer(
     question: str = Form(...),
@@ -150,39 +161,25 @@ async def analyze_text_answer(
 
     if use_groq == "true":
         try:
-            result = analyze_with_groq(question, text)
-            return result
+            return analyze_with_groq(question, text)
         except Exception as e:
-            print(f"Groq analysis failed: {e}, falling back...")
+            print(f"Groq failed: {e}, falling back...")
 
-    # Try own model first
     try:
         from app.model.predictor import predict_score, is_model_available
         if is_model_available():
             model_result    = predict_score(question, text)
             nlp_result      = analyze_text(text, question)
             confidence_data = analyze_confidence(text)
+            final_score, breakdown = build_breakdown(model_result["score"], confidence_data, nlp_result)
             feedback = generate_feedback(
-                nlp_result["question_type"],
-                nlp_result["structure"],
-                nlp_result["clarity"],
-                confidence_data,
-                {"breakdown": {
-                    "structure":  model_result["score"],
-                    "content":    model_result["score"],
-                    "confidence": 100 if confidence_data["confidence_level"] == "High" else 70,
-                    "clarity":    70  if nlp_result["clarity"]["too_short"] else 100,
-                }}
+                nlp_result["question_type"], nlp_result["structure"],
+                nlp_result["clarity"], confidence_data, {"breakdown": breakdown}
             )
             return {
                 "question_type":      nlp_result["question_type"],
-                "final_score":        model_result["score"],
-                "breakdown": {
-                    "structure":  model_result["score"],
-                    "content":    model_result["score"],
-                    "confidence": 100 if confidence_data["confidence_level"] == "High" else 70,
-                    "clarity":    70  if nlp_result["clarity"]["too_short"] else 100,
-                },
+                "final_score":        final_score,
+                "breakdown":          breakdown,
                 "feedback":           feedback,
                 "word_count":         nlp_result["clarity"]["word_count"],
                 "filler_count":       nlp_result["filler_count"],
@@ -190,27 +187,14 @@ async def analyze_text_answer(
                 "structure_detected": nlp_result["structure"],
                 "model":              "custom",
                 "label":              model_result["label"],
-                "model_confidence":   model_result["confidence"],
             }
     except Exception as e:
-        print(f"Own model failed: {e}, falling back to keywords...")
+        print(f"Model failed: {e}, falling back to keywords...")
 
-    # Keyword fallback
     nlp_result      = analyze_text(text, question)
     confidence_data = analyze_confidence(text)
-    scores = compute_score(
-        nlp_result["question_type"],
-        nlp_result["structure"],
-        nlp_result["clarity"],
-        nlp_result["filler_count"]
-    )
-    feedback = generate_feedback(
-        nlp_result["question_type"],
-        nlp_result["structure"],
-        nlp_result["clarity"],
-        confidence_data,
-        scores
-    )
+    scores = compute_score(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], nlp_result["filler_count"])
+    feedback = generate_feedback(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], confidence_data, scores)
     return {
         "question_type":      nlp_result["question_type"],
         "final_score":        scores["final_score"],
@@ -223,6 +207,7 @@ async def analyze_text_answer(
         "model":              "keywords",
     }
 
+
 @router.post("/analyze/audio")
 async def analyze_audio_answer(
     question: str = Form(...),
@@ -232,50 +217,36 @@ async def analyze_audio_answer(
     temp_path = f"temp_{audio.filename}"
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(audio.file, buffer)
-
     try:
         text = transcribe_audio(temp_path)
-
         if use_groq == "true":
             try:
                 result = analyze_with_groq(question, text)
                 result["transcript"] = text
                 return result
             except Exception as e:
-                print(f"Groq analysis failed: {e}, falling back to keyword analysis")
+                print(f"Groq failed: {e}")
 
         nlp_result = analyze_text(text, question)
         confidence_data = analyze_confidence(text)
-        scores = compute_score(
-            nlp_result["question_type"],
-            nlp_result["structure"],
-            nlp_result["clarity"],
-            nlp_result["filler_count"]
-        )
-        feedback = generate_feedback(
-            nlp_result["question_type"],
-            nlp_result["structure"],
-            nlp_result["clarity"],
-            confidence_data,
-            scores
-        )
-
+        scores = compute_score(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], nlp_result["filler_count"])
+        feedback = generate_feedback(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], confidence_data, scores)
         return {
-            "transcript":         text,
-            "question_type":      nlp_result["question_type"],
-            "final_score":        scores["final_score"],
-            "breakdown":          scores["breakdown"],
-            "feedback":           feedback,
-            "word_count":         nlp_result["clarity"]["word_count"],
-            "filler_count":       nlp_result["filler_count"],
-            "confidence_level":   confidence_data["confidence_level"],
+            "transcript": text,
+            "question_type": nlp_result["question_type"],
+            "final_score": scores["final_score"],
+            "breakdown": scores["breakdown"],
+            "feedback": feedback,
+            "word_count": nlp_result["clarity"]["word_count"],
+            "filler_count": nlp_result["filler_count"],
+            "confidence_level": confidence_data["confidence_level"],
             "structure_detected": nlp_result["structure"],
         }
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-            
-            
+
+
 @router.post("/analyze/video")
 async def analyze_video_answer(
     question: str = Form(...),
@@ -285,52 +256,29 @@ async def analyze_video_answer(
     temp_path = f"temp_{video.filename}"
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(video.file, buffer)
-
     try:
-        # Extract audio and transcribe
         text = transcribe_audio(temp_path)
-
-        # Analyze body language from video
         body_language = analyze_video(temp_path)
-
-        # Analyze answer text
         nlp_result = analyze_text(text, question)
         confidence_data = analyze_confidence(text)
-        scores = compute_score(
-            nlp_result["question_type"],
-            nlp_result["structure"],
-            nlp_result["clarity"],
-            nlp_result["filler_count"]
-        )
-        feedback = generate_feedback(
-            nlp_result["question_type"],
-            nlp_result["structure"],
-            nlp_result["clarity"],
-            confidence_data,
-            scores
-        )
-
-        # Combined final score (70% answer + 30% body language)
-        combined_score = round(
-            scores["final_score"] * 0.70 +
-            body_language["body_language_score"] * 0.30
-        )
-
+        scores = compute_score(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], nlp_result["filler_count"])
+        feedback = generate_feedback(nlp_result["question_type"], nlp_result["structure"], nlp_result["clarity"], confidence_data, scores)
+        combined_score = round(scores["final_score"] * 0.70 + body_language["body_language_score"] * 0.30)
         return {
-            "transcript":           text,
-            "question_type":        nlp_result["question_type"],
-            "final_score":          combined_score,
-            "answer_score":         scores["final_score"],
-            "body_language_score":  body_language["body_language_score"],
-            "breakdown":            scores["breakdown"],
+            "transcript": text,
+            "question_type": nlp_result["question_type"],
+            "final_score": combined_score,
+            "answer_score": scores["final_score"],
+            "body_language_score": body_language["body_language_score"],
+            "breakdown": scores["breakdown"],
             "body_language_breakdown": body_language["breakdown"],
-            "body_language_stats":  body_language["stats"],
-            "feedback":             feedback,
+            "body_language_stats": body_language["stats"],
+            "feedback": feedback,
             "body_language_feedback": body_language["feedback"],
-            "word_count":           nlp_result["clarity"]["word_count"],
-            "filler_count":         nlp_result["filler_count"],
-            "confidence_level":     confidence_data["confidence_level"],
-            "structure_detected":   nlp_result["structure"],
+            "word_count": nlp_result["clarity"]["word_count"],
+            "filler_count": nlp_result["filler_count"],
+            "confidence_level": confidence_data["confidence_level"],
+            "structure_detected": nlp_result["structure"],
         }
     finally:
         if os.path.exists(temp_path):

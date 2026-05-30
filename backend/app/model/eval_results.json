@@ -2,9 +2,9 @@
   "total_samples": 4470,
   "train_samples": 3576,
   "test_samples": 894,
-  "accuracy": 74.27,
-  "mae": 5.96,
-  "r2_score": 0.7377,
+  "accuracy": 72.82,
+  "mae": 6.32,
+  "r2_score": 0.7238,
   "label_dist": {
     "weak": 897,
     "below_avg": 897,
