@@ -85,6 +85,70 @@ def analyze_video(video_path: str) -> dict:
     nod_count = 0
     nose_y_prev = None
 
+    # for frame in frames:
+    #     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+
+    #     # Face detection
+    #     face_result = face_detector.detect(mp_image)
+    #     if face_result.face_landmarks:
+    #         face_detected_frames += 1
+    #         landmarks = face_result.face_landmarks[0]
+
+    #         # Eye contact — check if nose tip is centered
+    #         # Eye contact — use iris landmarks for accurate gaze detection
+    #         try:
+    #             left_iris  = landmarks[473]
+    #             right_iris = landmarks[468]
+    #             left_inner  = landmarks[133]
+    #             left_outer  = landmarks[33]
+    #             right_inner = landmarks[362]
+    #             right_outer = landmarks[263]
+            
+    #             left_eye_width  = abs(left_outer.x  - left_inner.x)
+    #             right_eye_width = abs(right_outer.x - right_inner.x)
+            
+    #             if left_eye_width > 0.001 and right_eye_width > 0.001:
+    #                 left_ratio  = (left_iris.x  - left_inner.x)  / left_eye_width
+    #                 right_ratio = (right_iris.x - right_inner.x) / right_eye_width
+            
+    #                 left_centered  = 0.25 < left_ratio  < 0.75
+    #                 right_centered = 0.25 < right_ratio < 0.75
+            
+    #                 if left_centered and right_centered:
+    #                     eye_contact_frames += 1
+    #         except:
+    #             # Fallback to nose position
+    #             nose = landmarks[1]
+    #             if abs(nose.x - 0.5) < 0.15:
+    #                 eye_contact_frames += 1
+            
+            
+    #         # Nod detection
+    #         if nose_y_prev is not None:
+    #             dy = nose.y - nose_y_prev
+    #             if dy > 0.02:
+    #                 nod_count += 1
+    #         nose_y_prev = nose.y
+
+    #     # Pose detection
+    #     pose_result = pose_detector.detect(mp_image)
+    #     if pose_result.pose_landmarks:
+    #         lm = pose_result.pose_landmarks[0]
+    #         try:
+    #             # Indices: LEFT_SHOULDER=11, RIGHT_SHOULDER=12, LEFT_EAR=7, RIGHT_EAR=8
+    #             ls = lm[11]; rs = lm[12]
+    #             le = lm[7];  re = lm[8]
+    #             shoulder_diff = abs(ls.y - rs.y)
+    #             avg_ear_y = (le.y + re.y) / 2
+    #             avg_shoulder_y = (ls.y + rs.y) / 2
+    #             if shoulder_diff < 0.05 and avg_ear_y < avg_shoulder_y:
+    #                 good_posture_frames += 1
+    #         except:
+    #             pass
+
+    
+    
     for frame in frames:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
@@ -94,8 +158,10 @@ def analyze_video(video_path: str) -> dict:
         if face_result.face_landmarks:
             face_detected_frames += 1
             landmarks = face_result.face_landmarks[0]
+            
+            # --- FIX: Define nose up here so it's always accessible ---
+            nose = landmarks[1] 
 
-            # Eye contact — check if nose tip is centered
             # Eye contact — use iris landmarks for accurate gaze detection
             try:
                 left_iris  = landmarks[473]
@@ -117,14 +183,12 @@ def analyze_video(video_path: str) -> dict:
             
                     if left_centered and right_centered:
                         eye_contact_frames += 1
-            except:
-                # Fallback to nose position
-                nose = landmarks[1]
+            except Exception:
+                # Fallback to nose position (nose is already defined above)
                 if abs(nose.x - 0.5) < 0.15:
                     eye_contact_frames += 1
             
-            
-            # Nod detection
+            # Nod detection — Safe to execute now!
             if nose_y_prev is not None:
                 dy = nose.y - nose_y_prev
                 if dy > 0.02:
@@ -133,19 +197,6 @@ def analyze_video(video_path: str) -> dict:
 
         # Pose detection
         pose_result = pose_detector.detect(mp_image)
-        if pose_result.pose_landmarks:
-            lm = pose_result.pose_landmarks[0]
-            try:
-                # Indices: LEFT_SHOULDER=11, RIGHT_SHOULDER=12, LEFT_EAR=7, RIGHT_EAR=8
-                ls = lm[11]; rs = lm[12]
-                le = lm[7];  re = lm[8]
-                shoulder_diff = abs(ls.y - rs.y)
-                avg_ear_y = (le.y + re.y) / 2
-                avg_shoulder_y = (ls.y + rs.y) / 2
-                if shoulder_diff < 0.05 and avg_ear_y < avg_shoulder_y:
-                    good_posture_frames += 1
-            except:
-                pass
 
     face_detector.close()
     pose_detector.close()

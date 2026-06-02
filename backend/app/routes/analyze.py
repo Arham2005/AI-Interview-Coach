@@ -219,6 +219,25 @@ async def analyze_audio_answer(
         shutil.copyfileobj(audio.file, buffer)
     try:
         text = transcribe_audio(temp_path)
+        # If transcription is empty or too short, return early
+        if not text or len(text.strip().split()) < 10:
+            return {
+                "transcript": text or "",
+                "question_type": "star",
+                "final_score": 0,
+                "answer_score": 0,
+                "body_language_score": 0,
+                "breakdown": {"structure": 0, "content": 0, "confidence": 0, "clarity": 0},
+                "body_language_breakdown": {"eye_contact": 0, "posture": 0, "presence": 0},
+                "body_language_stats": {"eye_contact_pct": 0, "good_posture_pct": 0, "face_detected_pct": 0, "nod_count": 0, "excessive_movement": False},
+                "feedback": [{"type": "error", "message": "No speech detected in the recording. Please speak clearly into the microphone."}],
+                "body_language_feedback": [],
+                "word_count": 0,
+                "filler_count": 0,
+                "confidence_level": "Low",
+                "structure_detected": {},
+            }
+    
         if use_groq == "true":
             try:
                 result = analyze_with_groq(question, text)
